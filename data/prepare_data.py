@@ -1,6 +1,6 @@
 """
-Data Preparation High-Performance: Xử lý song song (Parallel Processing).
-Tận dụng tối đa RAM 167GB và đa nhân CPU để chuẩn bị dữ liệu cực nhanh.
+Data Preparation Ultra-Stable: Batched Parallel Processing.
+Tối ưu cho RAM lớn và GPU khủng, tránh nghẽn I/O khi xử lý ảnh.
 
 Usage:
     python data/prepare_data.py --config configs/model_config.yaml
@@ -25,46 +25,56 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _parse_conversations(conversations_str: str) -> list[dict[str, str]]:
-    if isinstance(conversations_str, list):
+    if isinstance(conversations_str, list) or conversations_str is None:
         return conversations_str
     return json.loads(conversations_str)
 
 
-def _process_map_fn(item: dict[str, Any], max_qa: int = 5) -> dict[str, Any]:
-    """Hàm map để xử lý song song từng hàng."""
-    conversations = _parse_conversations(item["conversations"])
-    image = item["image"]
+def _process_batch_fn(batch: dict[str, list], max_qa: int = 5) -> dict[str, list]:
+    """Xử lý theo cụm (Batch) để tăng tốc độ và tránh nghẽn I/O."""
+    all_new_messages = []
     
-    results = []
-    current_messages = []
-    qa_count = 0
-
-    for i in range(0, len(conversations) - 1, 2):
-        user_turn = conversations[i]
-        assistant_turn = conversations[i + 1]
-
-        if len(current_messages) == 0:
-            user_content = [
-                {"type": "text", "text": user_turn["content"]},
-                {"type": "image", "image": image},
-            ]
-        else:
-            user_content = [{"type": "text", "text": user_turn["content"]}]
-
-        current_messages.append({"role": "user", "content": user_content})
-        current_messages.append({"role": "assistant", "content": [{"type": "text", "text": assistant_turn["content"]}]})
+    # Duyệt qua từng ảnh trong batch
+    for i in range(len(batch["image"])):
+        img = batch["image"][i]
+        convs = _parse_conversations(batch["conversations"][i])
         
-        qa_count += 1
-        if qa_count >= max_qa:
-            results.append(current_messages)
-            current_messages = []
-            qa_count = 0
+        if not convs: continue
 
-    if current_messages:
-        results.append(current_messages)
-    
-    # Dataset.map yêu cầu trả về dictionary với các cột mới
-    return {"all_messages": results}
+        current_msgs = []
+        qa_counter = 0
+
+        for j in range(0, len(convs) - 1, 2):
+            user_turn = convs[j]
+            assistant_turn = convs[j + 1]
+
+            # Đính kèm ảnh vào lượt user đầu tiên của mỗi sample mới
+            if len(current_msgs) == 0:
+                user_content = [
+                    {"type": "text", "text": user_turn["content"]},
+                    {"type": "image", "image": img},
+                ]
+            else:
+                user_content = [{"type": "text", "text": user_turn["content"]}]
+
+            current_msgs.append({"role": "user", "content": user_content})
+            current_msgs.append({
+                "role": "assistant", 
+                "content": [{"type": "text", "text": assistant_turn["content"]}]
+            })
+            
+            qa_counter += 1
+            
+            # Nếu đạt giới hạn QA hoặc hết lượt hội thoại
+            if qa_counter >= max_qa:
+                all_new_messages.append(current_msgs)
+                current_msgs = []
+                qa_counter = 0
+
+        if current_messages:
+            all_new_messages.append(current_msgs)
+            
+    return {"messages": all_new_messages}
 
 
 def prepare_and_save(config_path: str | Path) -> None:
@@ -82,49 +92,46 @@ def prepare_and_save(config_path: str | Path) -> None:
     processed_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print(f"� High-Performance Data Preparation")
+    print(f"🚀 Stable Batched Preparation Pipeline")
     print(f"📦 Loading dataset: {dataset_name}")
     raw_dataset = load_dataset(dataset_name, split="train")
     
-    # Tự động lấy số CPU core
-    num_cpus = os.cpu_count() or 4
-    print(f"⚙️ Using {num_cpus} CPU cores for parallel processing...")
+    # Đối với ảnh, dùng 4-6 cores là "điểm ngọt" (sweet spot)
+    num_cpus = min(6, os.cpu_count() or 4)
+    print(f"⚙️ Using {num_cpus} CPU cores with Batched Processing...")
 
-    # ─── Step 1: Parallel Map ────────────────────────────────────────
+    # ─── Step 1: Batched Map (Cực nhanh và ổn định) ──────────────────
     limit = 5 if max_qa_limit == 0 else min(5, max_qa_limit)
     
-    print(f"🔄 Processing and grouping (Parallel)...")
-    processed_raw = raw_dataset.map(
-        _process_map_fn,
+    print(f"🔄 Processing and grouping into multi-turn...")
+    processed_ds = raw_dataset.map(
+        _process_batch_fn,
         fn_kwargs={"max_qa": limit},
+        batched=True,
+        batch_size=100,             # Xử lý 100 ảnh mỗi cụm
         num_proc=num_cpus,
         remove_columns=raw_dataset.column_names,
-        desc="Parallel Processing"
+        desc="Batched Processing"
     )
 
-    # ─── Step 2: Flatten (Vì 1 ảnh ra nhiều sample) ──────────────────
-    print(f"💥 Flattening dataset...")
-    
-    def flatten_gen():
-        for item in processed_raw:
-            for msg_list in item["all_messages"]:
-                yield {"messages": msg_list}
+    print(f"✅ Total samples: {len(processed_ds)}")
 
-    full_dataset = Dataset.from_generator(flatten_gen)
-    print(f"✅ Total samples: {len(full_dataset)}")
+    # ─── Step 2: Shuffle & Split ──────────────────────────────────────
+    print(f"🔀 Shuffling and splitting (train_ratio={train_ratio})...")
+    processed_ds = processed_ds.shuffle(seed=seed)
+    ds_split = processed_ds.train_test_split(test_size=(1 - train_ratio), seed=seed)
 
-    # ─── Step 3: Shuffle & Split ──────────────────────────────────────
-    print(f"🔀 Shuffling and splitting...")
-    full_dataset = full_dataset.shuffle(seed=seed)
-    ds_split = full_dataset.train_test_split(test_size=(1 - train_ratio), seed=seed)
-
-    # ─── Step 4: Save ────────────────────────────────────────────────
-    print(f"\n💾 Saving to disk (Fast I/O)...")
+    # ─── Step 3: Save ────────────────────────────────────────────────
+    print(f"\n💾 Saving to disk: {processed_dir}/")
     ds_split["train"].save_to_disk(str(processed_dir / "train"))
     ds_split["test"].save_to_disk(str(processed_dir / "val"))
 
-    print(f"\n✅ Done! Parallel processing finished successfully.")
-    print(f"👉 Run training: python training/train.py {config_path}")
+    print(f"\n{'=' * 60}")
+    print("✅ Xong! Dataset đã sẵn sàng.")
+    print(f"   Train samples: {len(ds_split['train'])}")
+    print(f"   Val samples:   {len(ds_split['test'])}")
+    print(f"👉 Chạy training: python training/train.py {config_path}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
