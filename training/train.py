@@ -83,13 +83,31 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
 
     output_dir = train_cfg.get("output_dir", "outputs")
 
-    # Support cả max_steps và num_train_epochs
-    max_steps = train_cfg.get("max_steps", -1)
-    num_train_epochs = train_cfg.get("num_train_epochs", 1)
+    # Tính toán max_steps cho IterableDataset
+    # (Vì streaming nên phải tự tính để scheduler hoạt động)
+    per_device_batch = train_cfg.get("per_device_train_batch_size", 8)
+    grad_accum = train_cfg.get("gradient_accumulation_steps", 2)
+    eff_batch = per_device_batch * grad_accum
+    
+    # Đếm số dòng trong file metadata để biết tổng samples
+    processed_dir = Path(config["data"].get("processed_dir", "data/processed"))
+    train_meta_file = processed_dir / "train_meta.jsonl"
+    
+    if train_meta_file.exists():
+        with open(train_meta_file, "r") as f:
+            total_samples = sum(1 for _ in f)
+        steps_per_epoch = total_samples // eff_batch
+        calculated_max_steps = steps_per_epoch * train_cfg.get("num_train_epochs", 1)
+        print(f"📊 Training info: {total_samples} samples | {calculated_max_steps} total steps")
+    else:
+        calculated_max_steps = train_cfg.get("max_steps", 500)
+
+    max_steps = train_cfg.get("max_steps", calculated_max_steps)
+    if max_steps == -1: max_steps = calculated_max_steps
 
     sft_config = SFTConfig(
-        per_device_train_batch_size=train_cfg.get("per_device_train_batch_size", 8),
-        gradient_accumulation_steps=train_cfg.get("gradient_accumulation_steps", 2),
+        per_device_train_batch_size=per_device_batch,
+        gradient_accumulation_steps=grad_accum,
         warmup_steps=train_cfg.get("warmup_steps", 20),
         max_steps=max_steps,
         num_train_epochs=num_train_epochs,
