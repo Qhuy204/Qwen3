@@ -40,12 +40,21 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     print("=" * 60)
 
     from unsloth import FastVisionModel
+    from transformers import AutoProcessor
 
     model, tokenizer = FastVisionModel.from_pretrained(
         model_cfg["name"],
         load_in_4bit=model_cfg.get("load_in_4bit", True),
         use_gradient_checkpointing=model_cfg.get("use_gradient_checkpointing", "unsloth"),
     )
+
+    # Khắc phục lỗi mismatch positional embedding: Ép size trong config
+    if hasattr(model.config, "vision_config"):
+        model.config.vision_config.image_size = 512
+        # Một số version yêu cầu thêm tham số này
+        model.config.vision_config.max_window_size = 512
+    
+    processor = AutoProcessor.from_pretrained(model_cfg["name"])
 
     # ─── Step 2: Apply LoRA ───────────────────────────────────────────
     print("\n🔧 Step 2: Applying LoRA adapter...")
@@ -135,7 +144,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
-        data_collator=UnslothVisionDataCollator(model, tokenizer),
+        data_collator=UnslothVisionDataCollator(model, tokenizer, processor=processor),
         train_dataset=train_set,
         eval_dataset=val_set,
         args=sft_config,
