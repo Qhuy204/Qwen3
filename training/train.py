@@ -144,7 +144,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
-        data_collator=UnslothVisionDataCollator(model, tokenizer, processor=processor),
+        data_collator=UnslothVisionDataCollator(model, tokenizer, processor),
         train_dataset=train_set,
         eval_dataset=val_set,
         args=sft_config,
