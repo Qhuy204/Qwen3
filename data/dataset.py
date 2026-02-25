@@ -1,147 +1,77 @@
 """
-Data Pipeline: Load & prepare Qhuy204/VQA_VN_Destination for Qwen3-VL fine-tuning.
+Dataset Utilities: Load processed dataset from disk for training.
 
-Input:  HuggingFace dataset with columns (id, image, conversations)
-Output: HuggingFace Dataset with "messages" column (Unsloth-compatible)
+Flow:
+    1. Chạy: python data/prepare_data.py   (download + process + save)
+    2. Chạy: python training/train.py      (load processed data + train)
 """
 
 from __future__ import annotations
 
-import json
-import random
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from datasets import Dataset, load_dataset
+from datasets import Dataset, load_from_disk
 
 
-def _parse_conversations(conversations_str: str) -> list[dict[str, str]]:
-    """Parse conversations JSON string → list of {role, content}."""
-    if isinstance(conversations_str, list):
-        return conversations_str
-    return json.loads(conversations_str)
-
-
-def _convert_sample_to_messages(
-    sample: dict[str, Any],
-    max_qa_per_image: int = 5,
-) -> list[dict[str, Any]]:
-    """
-    Convert a single HF dataset sample → list of Unsloth message dicts.
-
-    Each QA pair becomes one training sample with format:
-    [
-        {"role": "user", "content": [{"type": "text", ...}, {"type": "image", ...}]},
-        {"role": "assistant", "content": [{"type": "text", ...}]}
-    ]
-    """
-    conversations = _parse_conversations(sample["conversations"])
-    image = sample["image"]
-
-    results: list[dict[str, Any]] = []
-    qa_count = 0
-
-    for i in range(0, len(conversations) - 1, 2):
-        if max_qa_per_image > 0 and qa_count >= max_qa_per_image:
-            break
-
-        user_turn = conversations[i]
-        assistant_turn = conversations[i + 1]
-
-        if user_turn.get("role") != "user" or assistant_turn.get("role") != "assistant":
-            continue
-
-        messages = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_turn["content"]},
-                        {"type": "image", "image": image},
-                    ],
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": assistant_turn["content"]},
-                    ],
-                },
-            ]
-        }
-        results.append(messages)
-        qa_count += 1
-
-    return results
-
-
-def load_and_prepare_dataset(
+def load_processed_dataset(
     config_path: str | Path,
     split: Optional[str] = None,
 ) -> dict[str, Dataset]:
     """
-    Load dataset from HuggingFace Hub and prepare for Unsloth training.
+    Load pre-processed dataset từ disk (đã được prepare_data.py tạo ra).
 
     Args:
         config_path: Path to YAML config file.
-        split: If provided, only return that split ("train", "val", "test").
+        split: If provided, only load that split ("train", "val", "test").
 
     Returns:
         Dict with keys "train", "val", "test" → HuggingFace Datasets.
+
+    Raises:
+        FileNotFoundError: nếu chưa chạy prepare_data.py.
     """
     config_path = Path(config_path)
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    data_cfg = config["data"]
-    dataset_name: str = data_cfg["dataset_name"]
-    max_qa_per_image: int = data_cfg.get("max_qa_per_image", 5)
-    train_ratio: float = data_cfg.get("train_ratio", 0.85)
-    val_ratio: float = data_cfg.get("val_ratio", 0.10)
-    seed: int = data_cfg.get("seed", 42)
+    processed_dir = Path(config["data"].get("processed_dir", "data/processed"))
 
-    print(f"📦 Loading dataset: {dataset_name}")
-    raw_dataset = load_dataset(dataset_name, split="train")
-    print(f"   → {len(raw_dataset)} images loaded")
+    if not processed_dir.exists():
+        raise FileNotFoundError(
+            f"❌ Thư mục '{processed_dir}' không tồn tại.\n"
+            f"   👉 Chạy trước: python data/prepare_data.py --config {config_path}"
+        )
 
-    # Convert each image → multiple QA samples
-    print(f"🔄 Converting to messages format (max {max_qa_per_image} QA/image)...")
-    all_samples: list[dict[str, Any]] = []
-    for sample in raw_dataset:
-        qa_samples = _convert_sample_to_messages(sample, max_qa_per_image)
-        all_samples.extend(qa_samples)
+    split_names = [split] if split else ["train", "val", "test"]
+    datasets: dict[str, Dataset] = {}
 
-    print(f"   → {len(all_samples)} total QA samples")
+    for name in split_names:
+        split_path = processed_dir / name
+        if not split_path.exists():
+            raise FileNotFoundError(
+                f"❌ Split '{name}' không tồn tại tại '{split_path}'.\n"
+                f"   👉 Chạy lại: python data/prepare_data.py --config {config_path}"
+            )
+        datasets[name] = load_from_disk(str(split_path))
+        print(f"   📂 Loaded {name}: {len(datasets[name])} samples")
 
-    # Shuffle & split
-    random.seed(seed)
-    random.shuffle(all_samples)
-
-    n = len(all_samples)
-    n_train = int(n * train_ratio)
-    n_val = int(n * val_ratio)
-
-    splits = {
-        "train": Dataset.from_list(all_samples[:n_train]),
-        "val": Dataset.from_list(all_samples[n_train : n_train + n_val]),
-        "test": Dataset.from_list(all_samples[n_train + n_val :]),
-    }
-
-    print(f"✅ Split sizes — Train: {len(splits['train'])}, Val: {len(splits['val'])}, Test: {len(splits['test'])}")
-
-    if split is not None:
-        return {split: splits[split]}
-    return splits
+    return datasets
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Test data pipeline")
+    parser = argparse.ArgumentParser(description="Test loading processed dataset")
     parser.add_argument("--config", type=str, default="configs/model_config.yaml")
     args = parser.parse_args()
 
-    datasets = load_and_prepare_dataset(args.config)
+    datasets = load_processed_dataset(args.config)
+    print(f"\n✅ All splits loaded successfully!")
+    for name, ds in datasets.items():
+        print(f"   {name}: {len(ds)} samples")
+
     # Print a sample
     sample = datasets["train"][0]
     print("\n📝 Sample message structure:")

@@ -26,8 +26,8 @@ training:
   gradient_accumulation_steps: 2       # Effective batch = 16
   learning_rate: 2e-4
   warmup_steps: 20
-  max_steps: 500                       # Tăng lên hoặc dùng num_train_epochs cho full
-  # num_train_epochs: 1               # Uncomment cho full training
+  # max_steps: 500                     # Uncomment nếu chỉ muốn test nhanh
+  num_train_epochs: 1                  # 1 epoch đủ cho dataset lớn (~1.16M samples)
   weight_decay: 0.01
   lr_scheduler_type: "cosine"
   logging_steps: 5
@@ -42,10 +42,11 @@ training:
 
 data:
   dataset_name: "Qhuy204/VQA_VN_Destination"
+  processed_dir: "data/processed"                # Thư mục lưu dataset đã xử lý
   train_ratio: 0.85
   val_ratio: 0.10
   test_ratio: 0.05
-  max_qa_per_image: 0     # 0 = dùng hết QA/image (~39 QA/ảnh). Đặt 5-10 nếu muốn giới hạnt dataset size
+  max_qa_per_image: 0     # 0 = dùng hết QA/image (~39 QA/ảnh). Đặt 5-10 nếu muốn giới hạn
   seed: 42
 
 export:

@@ -65,14 +65,14 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     )
     model.print_trainable_parameters()
 
-    # ─── Step 3: Load Dataset ─────────────────────────────────────────
-    print("\n📦 Step 3: Loading dataset...")
-    from data.dataset import load_and_prepare_dataset
+    # ─── Step 3: Load Processed Dataset ─────────────────────────────
+    print("\n📦 Step 3: Loading processed dataset...")
+    from data.dataset import load_processed_dataset
 
-    datasets = load_and_prepare_dataset(config_path)
+    datasets = load_processed_dataset(config_path)
     train_set = datasets["train"]
-    val_set = datasets["val"]
-    print(f"   Train: {len(train_set)} | Val: {len(val_set)}")
+    val_set = datasets.get("val")
+    print(f"   Train: {len(train_set)} | Val: {len(val_set) if val_set else 0}")
 
     # ─── Step 4: Setup Trainer ────────────────────────────────────────
     print("\n⚙️ Step 4: Setting up trainer...")
@@ -83,11 +83,16 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
 
     output_dir = train_cfg.get("output_dir", "outputs")
 
+    # Support cả max_steps và num_train_epochs
+    max_steps = train_cfg.get("max_steps", -1)
+    num_train_epochs = train_cfg.get("num_train_epochs", 1)
+
     sft_config = SFTConfig(
         per_device_train_batch_size=train_cfg.get("per_device_train_batch_size", 8),
         gradient_accumulation_steps=train_cfg.get("gradient_accumulation_steps", 2),
         warmup_steps=train_cfg.get("warmup_steps", 20),
-        max_steps=train_cfg.get("max_steps", 500),
+        max_steps=max_steps,
+        num_train_epochs=num_train_epochs,
         learning_rate=float(train_cfg.get("learning_rate", 2e-4)),
         logging_steps=train_cfg.get("logging_steps", 5),
         save_steps=train_cfg.get("save_steps", 100),

@@ -4,3 +4,4 @@ outputs/
 exported_model/
 merged_model_16bit/
 __pycache__/
+data/processed/
