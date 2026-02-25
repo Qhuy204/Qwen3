@@ -1,6 +1,6 @@
 """
-Data Preparation In-Memory: Tận dụng 167GB RAM để xử lý siêu tốc.
-Bỏ qua Multiprocessing để tránh nghẽn I/O, xử lý trực tiếp trên RAM.
+Data Preparation High Speed + Image Resizing (512px).
+Tận dụng RAM 167GB để xử lý siêu tốc và resize ảnh để giảm tải training.
 
 Usage:
     python data/prepare_data.py --config configs/model_config.yaml
@@ -17,6 +17,7 @@ from typing import Any
 
 import yaml
 from datasets import Dataset, load_dataset
+from PIL import Image
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -29,6 +30,22 @@ def _parse_conversations(conversations_str: str) -> list[dict[str, str]]:
     return json.loads(conversations_str)
 
 
+def _resize_image(img: Image.Image, size: int = 512) -> Image.Image:
+    """Resize ảnh về max_dimension=size, giữ nguyên tỷ lệ."""
+    w, h = img.size
+    if max(w, h) <= size:
+        return img
+    
+    if w > h:
+        new_w = size
+        new_h = int(h * size / w)
+    else:
+        new_h = size
+        new_w = int(w * size / h)
+        
+    return img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+
 def prepare_and_save(config_path: str | Path) -> None:
     config_path = Path(config_path)
     with open(config_path, "r", encoding="utf-8") as f:
@@ -37,25 +54,25 @@ def prepare_and_save(config_path: str | Path) -> None:
     data_cfg = config["data"]
     dataset_name = data_cfg["dataset_name"]
     processed_dir = Path(data_cfg.get("processed_dir", "data/processed"))
-    max_qa_limit = data_cfg.get("max_qa_per_image", 5) # Mặc định gộp 5 QA vào 1 hội thoại
+    max_qa_limit = data_cfg.get("max_qa_per_image", 5)
     train_ratio = data_cfg.get("train_ratio", 0.85)
     seed = data_cfg.get("seed", 42)
+    # Thêm option resize vào config (mặc định 512)
+    image_size = data_cfg.get("image_resize", 512)
 
     processed_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print(f"🚀 In-Memory High Speed Preparation")
+    print(f"🚀 In-Memory Preparation + Resize ({image_size}px)")
     print(f"📦 Loading dataset: {dataset_name}")
     raw_dataset = load_dataset(dataset_name, split="train")
-    print(f"✅ {len(raw_dataset)} images loaded into RAM")
+    print(f"✅ {len(raw_dataset)} images loaded")
 
-    # ─── Step 1: In-Memory Processing ──────────────────────────────
-    print(f"\n🔄 Processing and Multi-turn grouping (Single-thread RAM mode)...")
+    # ─── Step 1: In-Memory Processing + Resize ─────────────────────
+    print(f"\n🔄 Processing, Resizing, and Multi-turn grouping...")
     
     all_samples = []
     total_images = len(raw_dataset)
-    
-    # Gộp 5 câu hỏi vào 1 turn cho đỡ nặng context
     limit = 5 if max_qa_limit == 0 else max_qa_limit
 
     for idx, item in enumerate(raw_dataset):
@@ -65,7 +82,9 @@ def prepare_and_save(config_path: str | Path) -> None:
         convs = _parse_conversations(item["conversations"])
         if not convs: continue
         
-        img = item["image"]
+        # Resize ảnh ngay tại đây
+        img = _resize_image(item["image"], size=image_size)
+        
         current_msgs = []
         qa_counter = 0
 
@@ -97,20 +116,20 @@ def prepare_and_save(config_path: str | Path) -> None:
             all_samples.append({"messages": current_msgs})
 
     # ─── Step 2: Create Dataset ──────────────────────────────────────
-    print(f"\n🏁 Step 2: Creating final dataset from {len(all_samples)} samples...")
+    print(f"\n🏁 Creating final dataset from {len(all_samples)} samples...")
     full_dataset = Dataset.from_list(all_samples)
 
-    print(f"🔀 Step 3: Shuffling and splitting...")
+    print(f"🔀 Shuffling and splitting...")
     full_dataset = full_dataset.shuffle(seed=seed)
     ds_split = full_dataset.train_test_split(test_size=(1 - train_ratio), seed=seed)
 
-    # ─── Step 4: Save ────────────────────────────────────────────────
-    print(f"\n💾 Step 4: Saving to disk (Sequential write)...")
+    # ─── Step 3: Save ────────────────────────────────────────────────
+    print(f"\n💾 Saving to disk (Compact size thanks to resizing)...")
     ds_split["train"].save_to_disk(str(processed_dir / "train"))
     ds_split["test"].save_to_disk(str(processed_dir / "val"))
 
     print(f"\n{'=' * 60}")
-    print("✅ Xong! Dataset chuẩn bị cực nhanh bằng RAM mode.")
+    print("✅ Xong! Dataset đã được resize và nén gọn nhẹ.")
     print(f"   Train: {len(ds_split['train'])} samples")
     print(f"   Val:   {len(ds_split['test'])} samples")
     print(f"👉 Chạy training: python training/train.py {config_path}")
