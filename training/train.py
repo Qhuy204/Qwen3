@@ -113,6 +113,9 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         report_to="none",
         bf16=train_cfg.get("bf16", True),
         fp16=train_cfg.get("fp16", False),
+        # Dùng nhiều worker để load ảnh nhanh hơn
+        dataloader_num_workers=train_cfg.get("dataloader_num_workers", 4),
+        dataloader_pin_memory=True,
         # Vision fine-tuning required settings (Đúng pattern Unsloth)
         remove_unused_columns=False,
         dataset_text_field="",

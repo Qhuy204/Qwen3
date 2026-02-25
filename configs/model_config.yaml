@@ -22,10 +22,11 @@ lora:
   finetune_mlp_modules: true
 
 training:
-  per_device_train_batch_size: 8      # A100 80GB → comfortable with batch 8
-  gradient_accumulation_steps: 2       # Effective batch = 16
-  learning_rate: 2e-4
-  warmup_steps: 20
+  per_device_train_batch_size: 32     # A100 80GB → tăng lên 32 cho máu
+  gradient_accumulation_steps: 1       # Tăng batch rồi thì giảm accum về 1
+  dataloader_num_workers: 8            # Dùng 8 nhân CPU để load/resize ảnh song song
+  learning_rate: 4e-4                  # Tăng batch size thì nên tăng nhẹ LR
+  warmup_steps: 40
   # max_steps: 500                     # Uncomment nếu chỉ muốn test nhanh
   num_train_epochs: 1                  # 1 epoch đủ cho dataset lớn (~1.16M samples)
   weight_decay: 0.01
@@ -38,7 +39,7 @@ training:
   output_dir: "outputs"
   max_length: 2048
   fp16: false
-  bf16: true                           # A100 supports bf16
+  bf16: false                           # A100 supports bf16
 
 data:
   dataset_name: "Qhuy204/VQA_VN_Destination"
