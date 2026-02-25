@@ -150,6 +150,9 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune Qwen3-VL-2B")
-    parser.add_argument("--config", type=str, default="configs/model_config.yaml")
+    parser.add_argument("config_pos", type=str, nargs="?", help="Path to YAML config (positional)")
+    parser.add_argument("--config", type=str, default="configs/model_config.yaml", help="Path to YAML config (optional flag)")
     args = parser.parse_args()
-    main(args.config)
+    
+    config_path = args.config_pos if args.config_pos else args.config
+    main(config_path)

@@ -101,7 +101,8 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export Qwen3-VL-2B to GGUF")
-    parser.add_argument("--config", type=str, default="configs/model_config.yaml")
+    parser.add_argument("config_pos", type=str, nargs="?", help="Path to YAML config (positional)")
+    parser.add_argument("--config", type=str, default="configs/model_config.yaml", help="Path to YAML config (optional flag)")
     parser.add_argument("--lora-path", type=str, default=None, help="Path to LoRA adapter")
     parser.add_argument(
         "--quantization",
@@ -111,4 +112,6 @@ if __name__ == "__main__":
         help="GGUF quantization method",
     )
     args = parser.parse_args()
-    main(args.config, args.lora_path, args.quantization)
+    
+    config_path = args.config_pos if args.config_pos else args.config
+    main(config_path, args.lora_path, args.quantization)
