@@ -71,7 +71,7 @@ def _process_batch_fn(batch: dict[str, list], max_qa: int = 5) -> dict[str, list
                 current_msgs = []
                 qa_counter = 0
 
-        if current_messages:
+        if current_msgs:
             all_new_messages.append(current_msgs)
             
     return {"messages": all_new_messages}
