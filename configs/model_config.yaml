@@ -1,0 +1,54 @@
+# ============================================================
+# Qwen3-VL-2B Fine-tuning Config
+# Train: A100 80GB  |  Inference: RTX 3060 12GB
+# ============================================================
+
+model:
+  name: "unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit"
+  load_in_4bit: true
+  max_seq_length: 2048
+  use_gradient_checkpointing: "unsloth"
+
+lora:
+  r: 16
+  lora_alpha: 16
+  lora_dropout: 0
+  bias: "none"
+  random_state: 3407
+  use_rslora: false
+  finetune_vision_layers: true
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+training:
+  per_device_train_batch_size: 8      # A100 80GB → comfortable with batch 8
+  gradient_accumulation_steps: 2       # Effective batch = 16
+  learning_rate: 2e-4
+  warmup_steps: 20
+  max_steps: 500                       # Tăng lên hoặc dùng num_train_epochs cho full
+  # num_train_epochs: 1               # Uncomment cho full training
+  weight_decay: 0.01
+  lr_scheduler_type: "cosine"
+  logging_steps: 5
+  save_steps: 100
+  eval_steps: 100
+  seed: 3407
+  optim: "adamw_8bit"
+  output_dir: "outputs"
+  max_length: 2048
+  fp16: false
+  bf16: true                           # A100 supports bf16
+
+data:
+  dataset_name: "Qhuy204/VQA_VN_Destination"
+  train_ratio: 0.85
+  val_ratio: 0.10
+  test_ratio: 0.05
+  max_qa_per_image: 0     # 0 = dùng hết QA/image (~39 QA/ảnh). Đặt 5-10 nếu muốn giới hạnt dataset size
+  seed: 42
+
+export:
+  quantization_method: "q4_k_m"        # Tối ưu cho RTX 3060
+  output_dir: "exported_model"
+  merge_16bit_dir: "merged_model_16bit"

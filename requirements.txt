@@ -1,0 +1,32 @@
+# ============================================================
+# Qwen3-VL-2B Fine-tuning & Inference
+# ============================================================
+# Install via: pip install -r requirements.txt
+
+# Core ML
+torch>=2.1.0
+transformers==4.57.1
+accelerate>=0.34.0
+peft>=0.13.0
+trl==0.22.2
+bitsandbytes>=0.43.0
+
+# Unsloth (install separately if issues)
+unsloth
+unsloth_zoo
+
+# Vision
+qwen-vl-utils
+Pillow>=10.0.0
+
+# Data
+datasets>=4.3.0
+huggingface_hub>=0.34.0
+
+# Config & utils
+PyYAML>=6.0
+sentencepiece
+protobuf
+
+# GGUF export (optional — needed only for export)
+# llama-cpp-python  # Uncomment if needed
