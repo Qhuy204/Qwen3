@@ -1,5 +1,6 @@
 """
 Training Pipeline: Fine-tune Qwen3-VL-2B with Unsloth + LoRA.
+Đúng pattern notebook gốc: PyTorch Dataset + UnslothVisionDataCollator(model, tokenizer).
 
 Usage:
     python training/train.py --config configs/model_config.yaml
@@ -40,21 +41,12 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     print("=" * 60)
 
     from unsloth import FastVisionModel
-    from transformers import AutoProcessor
 
     model, tokenizer = FastVisionModel.from_pretrained(
         model_cfg["name"],
         load_in_4bit=model_cfg.get("load_in_4bit", True),
         use_gradient_checkpointing=model_cfg.get("use_gradient_checkpointing", "unsloth"),
     )
-
-    # Khắc phục lỗi mismatch positional embedding: Ép size trong config
-    if hasattr(model.config, "vision_config"):
-        model.config.vision_config.image_size = 512
-        # Một số version yêu cầu thêm tham số này
-        model.config.vision_config.max_window_size = 512
-    
-    processor = AutoProcessor.from_pretrained(model_cfg["name"])
 
     # ─── Step 2: Apply LoRA ───────────────────────────────────────────
     print("\n🔧 Step 2: Applying LoRA adapter...")
@@ -74,14 +66,14 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     )
     model.print_trainable_parameters()
 
-    # ─── Step 3: Load Processed Dataset ─────────────────────────────
-    print("\n📦 Step 3: Loading processed dataset...")
+    # ─── Step 3: Load Dataset (Custom PyTorch Dataset) ────────────────
+    print("\n📦 Step 3: Loading dataset...")
     from data.dataset import load_processed_dataset
 
     datasets = load_processed_dataset(config_path)
     train_set = datasets["train"]
     val_set = datasets.get("val")
-    print(f"   Dataset loaded (Streaming mode)")
+    print(f"   Train: {len(train_set)} | Val: {len(val_set) if val_set else 0}")
 
     # ─── Step 4: Setup Trainer ────────────────────────────────────────
     print("\n⚙️ Step 4: Setting up trainer...")
@@ -91,29 +83,17 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     FastVisionModel.for_training(model)
 
     output_dir = train_cfg.get("output_dir", "outputs")
-
-    # Tính toán max_steps cho IterableDataset
-    # (Vì streaming nên phải tự tính để scheduler hoạt động)
     per_device_batch = train_cfg.get("per_device_train_batch_size", 8)
     grad_accum = train_cfg.get("gradient_accumulation_steps", 2)
-    eff_batch = per_device_batch * grad_accum
-    
-    # Đếm số dòng trong file metadata để biết tổng samples
-    processed_dir = Path(config["data"].get("processed_dir", "data/processed"))
-    train_meta_file = processed_dir / "train_meta.jsonl"
-    
     num_train_epochs = train_cfg.get("num_train_epochs", 1)
-    if train_meta_file.exists():
-        with open(train_meta_file, "r") as f:
-            total_samples = sum(1 for _ in f)
-        steps_per_epoch = total_samples // eff_batch
-        calculated_max_steps = steps_per_epoch * num_train_epochs
-        print(f"📊 Training info: {total_samples} samples | {calculated_max_steps} total steps")
-    else:
-        calculated_max_steps = train_cfg.get("max_steps", 500)
 
-    max_steps = train_cfg.get("max_steps", calculated_max_steps)
-    if max_steps == -1: max_steps = calculated_max_steps
+    # Tính max_steps từ dataset size (PyTorch Dataset có __len__)
+    eff_batch = per_device_batch * grad_accum
+    max_steps = train_cfg.get("max_steps", -1)
+    if max_steps == -1:
+        steps_per_epoch = len(train_set) // eff_batch
+        max_steps = steps_per_epoch * num_train_epochs
+    print(f"📊 Training: {len(train_set)} samples | {max_steps} total steps | eff_batch={eff_batch}")
 
     sft_config = SFTConfig(
         per_device_train_batch_size=per_device_batch,
@@ -124,8 +104,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         learning_rate=float(train_cfg.get("learning_rate", 2e-4)),
         logging_steps=train_cfg.get("logging_steps", 5),
         save_steps=train_cfg.get("save_steps", 100),
-        eval_steps=train_cfg.get("eval_steps", 100),
-        eval_strategy="no", # IterableDataset không hỗ trợ eval steps kiểu cũ dễ dàng
+        eval_strategy="no",
         weight_decay=float(train_cfg.get("weight_decay", 0.01)),
         lr_scheduler_type=train_cfg.get("lr_scheduler_type", "cosine"),
         seed=train_cfg.get("seed", 3407),
@@ -134,19 +113,20 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         report_to="none",
         bf16=train_cfg.get("bf16", True),
         fp16=train_cfg.get("fp16", False),
+        # Vision fine-tuning required settings (Đúng pattern Unsloth)
         remove_unused_columns=False,
         dataset_text_field="",
         dataset_kwargs={"skip_prepare_dataset": True},
         max_seq_length=train_cfg.get("max_length", 2048),
-        packing=False, # Không dùng packing cho vision
+        packing=False,
     )
 
+    # Đúng pattern notebook: UnslothVisionDataCollator(model, tokenizer) — 2 args
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
-        data_collator=UnslothVisionDataCollator(model, tokenizer, processor),
+        data_collator=UnslothVisionDataCollator(model, tokenizer),
         train_dataset=train_set,
-        eval_dataset=val_set,
         args=sft_config,
     )
 
