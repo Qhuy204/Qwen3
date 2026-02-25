@@ -93,11 +93,12 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     processed_dir = Path(config["data"].get("processed_dir", "data/processed"))
     train_meta_file = processed_dir / "train_meta.jsonl"
     
+    num_train_epochs = train_cfg.get("num_train_epochs", 1)
     if train_meta_file.exists():
         with open(train_meta_file, "r") as f:
             total_samples = sum(1 for _ in f)
         steps_per_epoch = total_samples // eff_batch
-        calculated_max_steps = steps_per_epoch * train_cfg.get("num_train_epochs", 1)
+        calculated_max_steps = steps_per_epoch * num_train_epochs
         print(f"📊 Training info: {total_samples} samples | {calculated_max_steps} total steps")
     else:
         calculated_max_steps = train_cfg.get("max_steps", 500)
