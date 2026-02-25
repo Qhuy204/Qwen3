@@ -39,14 +39,17 @@ def load_processed_dataset(
                 item = json.loads(line)
                 img_idx = item["idx"]
                 qa_list = item["qa"]
-                
-                # Load & Resize
+                # Resize ảnh: Bắt buộc phải là bội số của 28 cho Qwen-VL
                 img = raw_images[img_idx]["image"]
                 if image_resize > 0:
                     w, h = img.size
-                    if max(w, h) > image_resize:
-                        scale = image_resize / max(w, h)
-                        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+                    scale = image_resize / max(w, h)
+                    # Làm tròn về bội số của 28 gần nhất
+                    new_w = max(28, (int(w * scale) // 28) * 28)
+                    new_h = max(28, (int(h * scale) // 28) * 28)
+                    
+                    if new_w != w or new_h != h:
+                        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
                 # Format Unsloth
                 messages = []
