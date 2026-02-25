@@ -72,7 +72,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     datasets = load_processed_dataset(config_path)
     train_set = datasets["train"]
     val_set = datasets.get("val")
-    print(f"   Train: {len(train_set)} | Val: {len(val_set) if val_set else 0}")
+    print(f"   Dataset loaded (Streaming mode)")
 
     # ─── Step 4: Setup Trainer ────────────────────────────────────────
     print("\n⚙️ Step 4: Setting up trainer...")
@@ -97,7 +97,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         logging_steps=train_cfg.get("logging_steps", 5),
         save_steps=train_cfg.get("save_steps", 100),
         eval_steps=train_cfg.get("eval_steps", 100),
-        eval_strategy="steps" if val_set is not None else "no",
+        eval_strategy="no", # IterableDataset không hỗ trợ eval steps kiểu cũ dễ dàng
         weight_decay=float(train_cfg.get("weight_decay", 0.01)),
         lr_scheduler_type=train_cfg.get("lr_scheduler_type", "cosine"),
         seed=train_cfg.get("seed", 3407),
@@ -106,11 +106,11 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         report_to="none",
         bf16=train_cfg.get("bf16", True),
         fp16=train_cfg.get("fp16", False),
-        # Vision fine-tuning required settings
         remove_unused_columns=False,
         dataset_text_field="",
         dataset_kwargs={"skip_prepare_dataset": True},
         max_seq_length=train_cfg.get("max_length", 2048),
+        packing=False, # Không dùng packing cho vision
     )
 
     trainer = SFTTrainer(

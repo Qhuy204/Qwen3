@@ -1,6 +1,6 @@
 """
-Dataset Loader: Kết hợp Metadata với Ảnh gốc từ HF Cache.
-Đây là cách tối ưu nhất để train với Vision Dataset lớn.
+Dataset Loader: Sử dụng IterableDataset để bắt đầu train NGAY LẬP TỨC.
+Không cần chờ đợi tạo 1.1 triệu samples, dữ liệu sẽ được load theo kiểu "vừa train vừa load".
 """
 
 from __future__ import annotations
@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from datasets import Dataset, load_dataset
+from datasets import load_dataset, IterableDataset
 from PIL import Image
 
 
 def load_processed_dataset(
     config_path: str | Path,
     split: Optional[str] = None,
-) -> dict[str, Dataset]:
-    """Load metadata từ jsonl và gán ảnh từ HF dataset."""
+) -> dict[str, Any]:
+    """Load metadata và trả về IterableDataset để train ngay."""
     config_path = Path(config_path)
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -28,50 +28,46 @@ def load_processed_dataset(
     dataset_name = data_cfg["dataset_name"]
     image_resize = data_cfg.get("image_resize", 512)
 
-    # 1. Load Original Dataset (Lấy ảnh từ cache)
+    # 1. Load Original Dataset (Image Cache)
     print(f"📦 Connecting to original image cache: {dataset_name}")
     raw_images = load_dataset(dataset_name, split="train")
 
-    # 2. Hàm gom metadata + image
-    def _create_hf_dataset(meta_file: Path) -> Dataset:
-        print(f"   📖 Reading {meta_file.name}...")
-        meta_data = []
+    # 2. Generator function
+    def _gen_fn(meta_file: Path):
         with open(meta_file, "r", encoding="utf-8") as f:
             for line in f:
-                meta_data.append(json.loads(line))
-        
-        def gen_fn():
-            for item in meta_data:
+                item = json.loads(line)
                 img_idx = item["idx"]
                 qa_list = item["qa"]
                 
-                # Resize ảnh tại đây (trên CPU của nhân train)
+                # Load & Resize
                 img = raw_images[img_idx]["image"]
                 if image_resize > 0:
                     w, h = img.size
                     if max(w, h) > image_resize:
                         scale = image_resize / max(w, h)
-                        img = img.resize((int(w*scale), int(h*scale)), Image.Resampling.LANCZOS)
+                        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
-                # Format thành Unsloth messages
+                # Format Unsloth
                 messages = []
                 for j, qa in enumerate(qa_list):
                     user_content = [{"type": "text", "text": qa["u"]}]
-                    if j == 0: # Chỉ đính kèm ảnh vào lượt đầu
+                    if j == 0:
                         user_content.append({"type": "image", "image": img})
-                    
                     messages.append({"role": "user", "content": user_content})
                     messages.append({"role": "assistant", "content": [{"type": "text", "text": qa["a"]}]})
                 
                 yield {"messages": messages}
 
-        return Dataset.from_generator(gen_fn)
-
-    # 3. Load các split
+    # 3. Trả về IterableDataset (Không tốn thời gian generate trước)
     datasets = {}
     if split in [None, "train"]:
-        datasets["train"] = _create_hf_dataset(processed_dir / "train_meta.jsonl")
+        datasets["train"] = IterableDataset.from_generator(
+            _gen_fn, gen_kwargs={"meta_file": processed_dir / "train_meta.jsonl"}
+        )
     if split in [None, "val"]:
-        datasets["val"] = _create_hf_dataset(processed_dir / "val_meta.jsonl")
+        datasets["val"] = IterableDataset.from_generator(
+            _gen_fn, gen_kwargs={"meta_file": processed_dir / "val_meta.jsonl"}
+        )
         
     return datasets
