@@ -48,8 +48,7 @@ def prepare_and_save(config_path: str | Path) -> None:
     print(f"📦 Loading dataset structure: {dataset_name}")
     raw_dataset = load_dataset(dataset_name, split="train")
     
-    # Ở bước này ta chỉ cần lấy text, không sờ vào image để tránh nặng
-    print(f"\n🔄 Extracting conversations and image indices...")
+    print(f"\n🔄 Extracting text metadata (Image processing skipped for speed)...")
     
     all_metadata = []
     limit = 5 if max_qa_limit == 0 else max_qa_limit
@@ -61,7 +60,6 @@ def prepare_and_save(config_path: str | Path) -> None:
         convs = _parse_conversations(item["conversations"])
         if not convs: continue
         
-        # Chỉ lưu nội dung text và index của ảnh, không lưu object Image
         current_qa = []
         qa_counter = 0
 
@@ -101,9 +99,8 @@ def prepare_and_save(config_path: str | Path) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     print(f"\n{'=' * 60}")
-    print("✅ Xong! Quá trình chuẩn bị metadata mất chưa tới 1 phút.")
-    print("   Dữ liệu ảnh sẽ được load trực tiếp từ cache khi train.")
-    print(f"👉 Chạy training: python training/train.py {config_path}")
+    print("✅ Xong! Quá trình chuẩn bị metadata chỉ mất vài chục giây.")
+    print("👉 Bây giờ chạy: python training/train.py configs/model_config.yaml")
     print("=" * 60)
 
 
