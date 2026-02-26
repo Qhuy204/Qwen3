@@ -34,7 +34,7 @@ training:
   weight_decay: 0.01
   lr_scheduler_type: "cosine"
   logging_steps: 5
-  save_steps: 200                      # Tăng lên chút vì dataset lớn
+  save_steps: 100                      # Tăng lên chút vì dataset lớn
   eval_steps: 200
   seed: 3407
   optim: "adamw_8bit"
