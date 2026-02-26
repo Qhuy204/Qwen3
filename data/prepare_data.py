@@ -51,8 +51,7 @@ def prepare_and_save(config_path: str | Path) -> None:
     print(f"\n🔄 Extracting text metadata (Image processing skipped for speed)...")
     
     all_metadata = []
-    limit = 5 if max_qa_limit == 0 else max_qa_limit
-
+    random.seed(seed)
     for idx, item in enumerate(raw_dataset):
         if idx % 5000 == 0:
             print(f"   Progress: {idx}/{len(raw_dataset)} images...")
@@ -60,23 +59,18 @@ def prepare_and_save(config_path: str | Path) -> None:
         convs = _parse_conversations(item["conversations"])
         if not convs: continue
         
-        current_qa = []
-        qa_counter = 0
-
+        all_qa_pairs = []
         for j in range(0, len(convs) - 1, 2):
             user_text = convs[j]["content"]
             assistant_text = convs[j+1]["content"]
-
-            current_qa.append({"u": user_text, "a": assistant_text})
-            qa_counter += 1
-            
-            if qa_counter >= limit:
-                all_metadata.append({"idx": idx, "qa": current_qa})
-                current_qa = []
-                qa_counter = 0
-
-        if current_qa:
-            all_metadata.append({"idx": idx, "qa": current_qa})
+            all_qa_pairs.append({"u": user_text, "a": assistant_text})
+        
+        # Random sampling if limit is set
+        if max_qa_limit > 0 and len(all_qa_pairs) > max_qa_limit:
+            all_qa_pairs = random.sample(all_qa_pairs, max_qa_limit)
+        
+        if all_qa_pairs:
+            all_metadata.append({"idx": idx, "qa": all_qa_pairs})
 
     # ─── Step 2: Shuffle & Split ──────────────────────────────────────
     print(f"\n🔀 Shuffling and splitting ({len(all_metadata)} samples)...")

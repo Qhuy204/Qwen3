@@ -39,7 +39,7 @@ training:
   output_dir: "outputs"
   max_length: 2048
   fp16: false
-  bf16: false                           # A100 supports bf16
+  bf16: true                           # A100 supports bf16
 
 data:
   dataset_name: "Qhuy204/VQA_VN_Destination"
@@ -47,7 +47,7 @@ data:
   train_ratio: 0.85
   val_ratio: 0.10
   test_ratio: 0.05
-  max_qa_per_image: 0     # 0 = dùng hết QA/image (~39 QA/ảnh). Đặt 5-10 nếu muốn giới hạn
+  max_qa_per_image: 10     # Lấy mẫu ngẫu nhiên 10 QA mỗi ảnh nếu vượt quá 10
   seed: 42
 
 export:
