@@ -52,13 +52,19 @@ Tải dataset từ HuggingFace, áp dụng chiến lược Hybrid và lưu metad
 python data/prepare_data.py --config configs/model_config.yaml
 ```
 
-### 3. Train (A100/L4)
+### 3. Train
 
-Sử dụng dữ liệu đã xử lý để train model. Tự động tìm checkpoint để resume:
-
+#### Single GPU (Colab/A100/L4):
 ```bash
 python training/train.py --config configs/model_config.yaml
 ```
+
+#### Multi-GPU (2x RTX 5080 / Vast.ai / DDP):
+Sử dụng `torchrun` để phân phối dữ liệu lên nhiều GPU:
+```bash
+torchrun --nproc_per_node=2 training/train.py --config configs/model_config.yaml
+```
+*Lưu ý: Thay `nproc_per_node` bằng số lượng GPU bạn có.*
 
 ### 4. Export & Download (Cho RTX 3060)
 
