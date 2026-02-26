@@ -7,9 +7,9 @@ Fine-tune **Qwen3-VL-8B-Instruct** trên dataset [Qhuy204/VQA_VN_Destination](ht
 | Component | Chi tiết |
 |:---|:---|
 | **Base Model** | `unsloth/Qwen3-VL-8B-Instruct-unsloth-bnb-4bit` |
-| **Method** | QLoRA 4-bit + LoRA (r=16) |
-| **Dataset** | ~29,759 images × ~39 QA/image (Total ~1.16M samples) |
-| **Train Time** | ~16-20 hours (A100 80GB) |
+| **Method** | QLoRA 4-bit + Hybrid Data Strategy (Strategy C) |
+| **Dataset** | ~30k images (Sampling: 5 single-turn + 1 multi-turn chunk/image) |
+| **Train Time** | ~7-10 hours (A100 80GB) |
 | **Inference** | RTX 3060 12GB (GGUF q4_k_m ~7.2GB VRAM) |
 
 ## GGUF Export Note

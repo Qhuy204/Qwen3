@@ -109,6 +109,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
         lr_scheduler_type=train_cfg.get("lr_scheduler_type", "cosine"),
         seed=train_cfg.get("seed", 3407),
         optim=train_cfg.get("optim", "adamw_8bit"),
+        max_grad_norm=float(train_cfg.get("max_grad_norm", 1.0)),
         output_dir=output_dir,
         report_to="none",
         bf16=train_cfg.get("bf16", True),

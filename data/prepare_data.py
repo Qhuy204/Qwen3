@@ -52,6 +52,12 @@ def prepare_and_save(config_path: str | Path) -> None:
     
     all_metadata = []
     random.seed(seed)
+    
+    # Target counts for Hybrid Strategy (per image)
+    N_SINGLE = 5
+    N_MULTI_CHUNKS = 1
+    CHUNK_SIZE = 5
+
     for idx, item in enumerate(raw_dataset):
         if idx % 5000 == 0:
             print(f"   Progress: {idx}/{len(raw_dataset)} images...")
@@ -59,18 +65,32 @@ def prepare_and_save(config_path: str | Path) -> None:
         convs = _parse_conversations(item["conversations"])
         if not convs: continue
         
+        # 1. Extract all basic QA pairs
         all_qa_pairs = []
         for j in range(0, len(convs) - 1, 2):
             user_text = convs[j]["content"]
             assistant_text = convs[j+1]["content"]
             all_qa_pairs.append({"u": user_text, "a": assistant_text})
         
-        # Random sampling if limit is set
-        if max_qa_limit > 0 and len(all_qa_pairs) > max_qa_limit:
-            all_qa_pairs = random.sample(all_qa_pairs, max_qa_limit)
-        
-        if all_qa_pairs:
-            all_metadata.append({"idx": idx, "qa": all_qa_pairs})
+        if not all_qa_pairs: continue
+
+        # ─── PART A: Single-Turn Samples ──────────────────────────────
+        # Mỗi entry trong list này sẽ được đưa vào metadata như 1 sample độc lập (1 pair)
+        n_to_sample = min(len(all_qa_pairs), N_SINGLE)
+        single_samples = random.sample(all_qa_pairs, n_to_sample)
+        for s in single_samples:
+            all_metadata.append({"idx": idx, "qa": [s]})
+
+        # ─── PART B: Multi-Turn Chunks ────────────────────────────────
+        # Lấy các block liên tiếp (consecutive) để học dialogue flow
+        if len(all_qa_pairs) >= 3:
+            for _ in range(N_MULTI_CHUNKS):
+                # Chọn điểm bắt đầu ngẫu nhiên cho chunk
+                max_start = max(0, len(all_qa_pairs) - CHUNK_SIZE)
+                start_i = random.randint(0, max_start)
+                chunk = all_qa_pairs[start_i : start_i + CHUNK_SIZE]
+                if len(chunk) >= 2: # Ít nhất 2 turn để gọi là multi-turn
+                    all_metadata.append({"idx": idx, "qa": chunk})
 
     # ─── Step 2: Shuffle & Split ──────────────────────────────────────
     print(f"\n🔀 Shuffling and splitting ({len(all_metadata)} samples)...")

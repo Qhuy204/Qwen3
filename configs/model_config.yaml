@@ -22,18 +22,19 @@ lora:
   finetune_mlp_modules: true
 
 training:
-  per_device_train_batch_size: 32     # A100 80GB → tăng lên 32 cho máu
-  gradient_accumulation_steps: 1       # Tăng batch rồi thì giảm accum về 1
+  per_device_train_batch_size: 16     # Giảm xuống 16 để an toàn VRAM khi ảnh res cao
+  gradient_accumulation_steps: 2       # Tăng lên 2 để giữ eff_batch = 32
   dataloader_num_workers: 8            # Dùng 8 nhân CPU để load/resize ảnh song song
-  learning_rate: 4e-4                  # Tăng batch size thì nên tăng nhẹ LR
-  warmup_steps: 40
+  learning_rate: 2e-4                  # Giảm LR xuống 2e-4 theo khuyến nghị (tránh spike/overfit)
+  max_grad_norm: 1.0                  # Thêm gradient clipping để ổn định training
+  warmup_steps: 50
   # max_steps: 500                     # Uncomment nếu chỉ muốn test nhanh
-  num_train_epochs: 1                  # 1 epoch đủ cho dataset lớn (~1.16M samples)
+  num_train_epochs: 1                  # 1 epoch đủ cho dataset lớn (~180k hybrid samples)
   weight_decay: 0.01
   lr_scheduler_type: "cosine"
   logging_steps: 5
-  save_steps: 100
-  eval_steps: 100
+  save_steps: 200                      # Tăng lên chút vì dataset lớn
+  eval_steps: 200
   seed: 3407
   optim: "adamw_8bit"
   output_dir: "outputs"
@@ -44,10 +45,10 @@ training:
 data:
   dataset_name: "Qhuy204/VQA_VN_Destination"
   processed_dir: "data/processed"                # Thư mục lưu dataset đã xử lý
-  train_ratio: 0.85
-  val_ratio: 0.10
+  train_ratio: 0.90                              # Tăng tập train
+  val_ratio: 0.05
   test_ratio: 0.05
-  max_qa_per_image: 10     # Lấy mẫu ngẫu nhiên 10 QA mỗi ảnh nếu vượt quá 10
+  max_qa_per_image: 10                           # Hybrid Strategy: 5 single + 5 consecutive pairs
   seed: 42
 
 export:
