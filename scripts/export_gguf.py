@@ -56,7 +56,7 @@ def main(
     Path(merge_16bit_dir).mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("📦 Qwen3-VL-2B → GGUF Export Pipeline")
+    print("📦 Qwen3-VL-8B → GGUF Export Pipeline")
     print("=" * 60)
     print(f"   Base model:    {model_cfg['name']}")
     print(f"   LoRA adapter:  {lora_path}")
@@ -84,23 +84,74 @@ def main(
 
     # ─── Step 3: Export GGUF ──────────────────────────────────────────
     print(f"\n📤 Step 3: Exporting GGUF ({quantization}) → {output_dir}")
-    model.save_pretrained_gguf(
-        output_dir,
-        tokenizer,
-        quantization_method=quantization,
-    )
+    try:
+        model.save_pretrained_gguf(
+            output_dir,
+            tokenizer,
+            quantization_method=quantization,
+        )
+    except Exception as e:
+        print(f"\n⚠️ Unsloth built-in GGUF export failed: {e}")
+        print("🔧 Falling back to manual llama.cpp conversion from 16-bit merged model...")
+        import subprocess
+        import os
+            
+            # Use llama.cpp's convert script directly on the 16bit dir
+            llama_cpp_path = Path("llama.cpp")
+            if not llama_cpp_path.exists():
+                print("   Downloading llama.cpp for fallback conversion...")
+                subprocess.run(
+                    "git clone https://github.com/ggerganov/llama.cpp.git", 
+                    shell=True, check=True
+                )
+                
+            print(f"   Building llama.cpp for quantization...")
+            subprocess.run("cd llama.cpp && cmake -B build && cmake --build build --config Release -j", shell=True, check=True)
+                
+            print(f"   Converting {merge_16bit_dir} to GGUF f16...")
+            
+            f16_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-f16.gguf"
+            final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
+            
+            convert_cmd = [
+                sys.executable,
+                "llama.cpp/convert_hf_to_gguf.py",
+                merge_16bit_dir,
+                f"--outfile={f16_gguf_path}",
+                f"--outtype=f16"
+            ]
+            
+            try:
+                subprocess.run(convert_cmd, check=True)
+                print("   ✅ Step 3a: Fallback GGUF f16 conversion completed successfully!")
+                
+                print(f"   Quantizing {f16_gguf_path} to {quantization}...")
+                quantize_cmd = [
+                    "./llama.cpp/build/bin/llama-quantize",
+                    f16_gguf_path,
+                    final_gguf_path,
+                    quantization
+                ]
+                subprocess.run(quantize_cmd, check=True)
+                print("   ✅ Step 3b: Fallback GGUF quantization completed successfully!")
+                
+                # Cleanup f16
+                Path(f16_gguf_path).unlink(missing_ok=True)
+            except subprocess.CalledProcessError as sub_e:
+                print(f"   ❌ Fallback GGUF conversion also failed: {sub_e}")
+                raise
 
     print("\n" + "=" * 60)
     print("✅ Export complete!")
     print(f"   GGUF file location: {output_dir}/")
     print(f"   Quantization: {quantization}")
     print(f"\n   🚀 RTX 3060 ready! Use with Ollama or llama.cpp:")
-    print(f"      ollama create qwen3vl-2b -f {output_dir}/Modelfile")
+    print(f"      ollama create qwen3vl-8b -f {output_dir}/Modelfile")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Export Qwen3-VL-2B to GGUF")
+    parser = argparse.ArgumentParser(description="Export Qwen3-VL-8B to GGUF")
     parser.add_argument("config_pos", type=str, nargs="?", help="Path to YAML config (positional)")
     parser.add_argument("--config", type=str, default="configs/model_config.yaml", help="Path to YAML config (optional flag)")
     parser.add_argument("--lora-path", type=str, default=None, help="Path to LoRA adapter")

@@ -1,5 +1,5 @@
 """
-Inference: Test fine-tuned Qwen3-VL-2B model on a single image + question.
+Inference: Test fine-tuned Qwen3-VL-8B model on a single image + question.
 
 Usage:
     python inference/predict.py --image path/to/image.jpg --question "Mô tả bức ảnh này"
@@ -136,7 +136,7 @@ def predict(
 
 def main() -> None:
     """CLI entry point for inference."""
-    parser = argparse.ArgumentParser(description="Qwen3-VL-2B Inference")
+    parser = argparse.ArgumentParser(description="Qwen3-VL-8B Inference")
     parser.add_argument("--image", type=str, required=True, help="Path to image")
     parser.add_argument(
         "--question",

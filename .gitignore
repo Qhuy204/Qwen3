@@ -3,5 +3,9 @@ __pycache__/
 outputs/
 exported_model/
 merged_model_16bit/
-__pycache__/
 data/processed/
+*.gguf
+llama.cpp/
+unsloth_compiled_cache/
+Modelfile*
+test_vram.py

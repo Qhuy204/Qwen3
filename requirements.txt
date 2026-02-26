@@ -1,5 +1,5 @@
 # ============================================================
-# Qwen3-VL-2B Fine-tuning & Inference
+# Qwen3-VL-8B Fine-tuning & Inference
 # ============================================================
 # Install via: pip install -r requirements.txt
 
@@ -12,7 +12,7 @@ trl==0.22.2
 bitsandbytes>=0.43.0
 
 # Unsloth (install separately if issues)
-unsloth
+unsloth @ git+https://github.com/unslothai/unsloth.git
 unsloth_zoo
 
 # Vision

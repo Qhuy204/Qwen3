@@ -1,12 +1,12 @@
-# Qwen3-VL-2B: Vietnamese Travel VQA
+# Qwen3-VL-8B: Vietnamese Travel VQA
 
-Fine-tune **Qwen3-VL-2B-Instruct** trên dataset [Qhuy204/VQA_VN_Destination](https://huggingface.co/datasets/Qhuy204/VQA_VN_Destination), quantize sang GGUF `q4_k_m` để inference nhẹ trên RTX 3060.
+Fine-tune **Qwen3-VL-8B-Instruct** trên dataset [Qhuy204/VQA_VN_Destination](https://huggingface.co/datasets/Qhuy204/VQA_VN_Destination), quantize sang GGUF `q4_k_m` để inference nhẹ trên RTX 3060.
 
 ## Tổng quan
 
 | Component | Chi tiết |
 |:---|:---|
-| **Base Model** | `unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit` |
+| **Base Model** | `unsloth/Qwen3-VL-8B-Instruct-unsloth-bnb-4bit` |
 | **Method** | QLoRA 4-bit + LoRA (r=16) |
 | **Dataset** | ~29,759 images × ~39 QA/image (Total ~1.16M samples) |
 | **Train** | A100 80GB (bf16, batch=8, eff_batch=16) |
@@ -66,8 +66,8 @@ python inference/predict.py --image path/to/image.jpg --question "Mô tả bức
 
 # Dùng GGUF + Ollama (sau khi export)
 # Modelfile được tự động tạo trong exported_model/
-ollama create qwen3vl-2b -f exported_model/Modelfile
-ollama run qwen3vl-2b
+ollama create qwen3vl-8b -f exported_model/Modelfile
+ollama run qwen3vl-8b
 ```
 
 ## Config

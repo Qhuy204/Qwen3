@@ -1,10 +1,10 @@
 # ============================================================
-# Qwen3-VL-2B Fine-tuning Config
+# Qwen3-VL-8B Fine-tuning Config
 # Train: A100 80GB  |  Inference: RTX 3060 12GB
 # ============================================================
 
 model:
-  name: "unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit"
+  name: "unsloth/Qwen3-VL-8B-Instruct-unsloth-bnb-4bit"
   load_in_4bit: true
   max_seq_length: 2048
   use_gradient_checkpointing: "unsloth"

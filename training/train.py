@@ -1,5 +1,5 @@
 """
-Training Pipeline: Fine-tune Qwen3-VL-2B with Unsloth + LoRA.
+Training Pipeline: Fine-tune Qwen3-VL-8B with Unsloth + LoRA.
 Đúng pattern notebook gốc: PyTorch Dataset + UnslothVisionDataCollator(model, tokenizer).
 
 Usage:
@@ -160,7 +160,7 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fine-tune Qwen3-VL-2B")
+    parser = argparse.ArgumentParser(description="Fine-tune Qwen3-VL-8B")
     parser.add_argument("config_pos", type=str, nargs="?", help="Path to YAML config (positional)")
     parser.add_argument("--config", type=str, default="configs/model_config.yaml", help="Path to YAML config (optional flag)")
     args = parser.parse_args()
