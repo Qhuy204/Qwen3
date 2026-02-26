@@ -23,8 +23,8 @@ lora:
 
 training:
   resume_from_checkpoint: true        # Tự động tiếp tục từ checkpoint mới nhất nếu có
-  per_device_train_batch_size: 16     # Giảm xuống 16 để an toàn VRAM khi ảnh res cao
-  gradient_accumulation_steps: 2       # Tăng lên 2 để giữ eff_batch = 32
+  per_device_train_batch_size: 20     # Giảm xuống 16 để an toàn VRAM khi ảnh res cao
+  gradient_accumulation_steps: 2      # Tăng lên 2 để giữ eff_batch = 32
   dataloader_num_workers: 8            # Dùng 8 nhân CPU để load/resize ảnh song song
   learning_rate: 2e-4                  # Giảm LR xuống 2e-4 theo khuyến nghị (tránh spike/overfit)
   max_grad_norm: 1.0                  # Thêm gradient clipping để ổn định training
