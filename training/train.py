@@ -146,7 +146,10 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     print("🏋️ Step 6: Starting training...")
     print("=" * 60)
 
-    trainer_stats = trainer.train()
+    resume_from_checkpoint = train_cfg.get("resume_from_checkpoint", False)
+    
+    # Nếu bật resume, Trainer sẽ tự tìm checkpoint mới nhất trong output_dir
+    trainer_stats = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     print("\n✅ Training complete!")
     print(f"   Total steps: {trainer_stats.global_step}")
