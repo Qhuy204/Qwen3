@@ -11,10 +11,9 @@ peft>=0.13.0
 trl==0.22.2
 bitsandbytes>=0.43.0
 
-# Unsloth (Cài đặt đồng bộ từ GitHub để tránh lỗi KeyError: 'sanitize_logprob')
---external-index https://download.pytorch.org/whl/cu124
-unsloth @ git+https://github.com/unslothai/unsloth.git
-unsloth_zoo @ git+https://github.com/unslothai/unsloth-zoo.git
+# Unsloth stable release (PyPI)
+unsloth
+unsloth_zoo
 
 # Vision
 qwen-vl-utils
