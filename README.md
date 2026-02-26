@@ -9,8 +9,11 @@ Fine-tune **Qwen3-VL-8B-Instruct** trên dataset [Qhuy204/VQA_VN_Destination](ht
 | **Base Model** | `unsloth/Qwen3-VL-8B-Instruct-unsloth-bnb-4bit` |
 | **Method** | QLoRA 4-bit + LoRA (r=16) |
 | **Dataset** | ~29,759 images × ~39 QA/image (Total ~1.16M samples) |
-| **Train** | A100 80GB (bf16, batch=8, eff_batch=16) |
-| **Inference** | RTX 3060 12GB (GGUF q4_k_m) |
+| **Train Time** | ~16-20 hours (A100 80GB) |
+| **Inference** | RTX 3060 12GB (GGUF q4_k_m ~7.2GB VRAM) |
+
+## GGUF Export Note
+Dự án bao gồm cơ chế **Fallback Export**. Nếu Unsloth không thể xuất GGUF trực tiếp (lỗi vision projector), script sẽ tự động tải và build `llama.cpp` để convert thủ công, đảm bảo luôn có file `.gguf` cuối cùng.
 
 ## Project Structure
 
