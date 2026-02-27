@@ -149,14 +149,23 @@ def main(config_path: str = "configs/model_config.yaml") -> None:
     resume_from_checkpoint = train_cfg.get("resume_from_checkpoint", False)
     
     # Kiểm tra thực tế xem có checkpoint nào trong thư mục không
-    checkpoints = list(Path(output_dir).glob("checkpoint-*"))
-    if resume_from_checkpoint and not checkpoints:
+    checkpoint_dirs = sorted(
+        list(Path(output_dir).glob("checkpoint-*")),
+        key=lambda x: int(x.name.split("-")[-1])
+    )
+    
+    if resume_from_checkpoint and not checkpoint_dirs:
         print(f"   ℹ️ Không tìm thấy checkpoint nào trong {output_dir}. Sẽ bắt đầu train mới.")
-        resume_from_checkpoint = False
+        resume_from_checkpoint = None
     elif resume_from_checkpoint:
-        print(f"   🔄 Tìm thấy {len(checkpoints)} checkpoints. Đang nạp checkpoint mới nhất...")
+        latest_checkpoint = checkpoint_dirs[-1]
+        print(f"   🔄 Tìm thấy {len(checkpoint_dirs)} checkpoints. Đang nạp {latest_checkpoint.name}...")
+        # Truyền đường dẫn cụ thể để Trainer không bị nhầm lẫn
+        resume_from_checkpoint = str(latest_checkpoint)
+    else:
+        resume_from_checkpoint = None
 
-    # Nếu bật resume, Trainer sẽ tự tìm checkpoint mới nhất trong output_dir
+    # Nếu bật resume, Trainer sẽ nạp từ đường dẫn cụ thể hoặc tự tìm
     trainer_stats = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     print("\n✅ Training complete!")
