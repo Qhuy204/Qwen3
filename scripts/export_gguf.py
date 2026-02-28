@@ -104,60 +104,48 @@ def main(
     # ─── Step 3: Export GGUF ──────────────────────────────────────────
     print(f"\n📤 Step 3: Exporting GGUF ({quantization}) → {output_dir}")
     try:
+        # Native Unsloth export is the best for VL models
         model.save_pretrained_gguf(
             output_dir,
             tokenizer,
             quantization_method=quantization,
         )
     except Exception as e:
-        print(f"\n⚠️ Unsloth built-in GGUF export failed: {e}")
-        print("🔧 Falling back to manual llama.cpp conversion from 16-bit merged model...")
+        print(f"\n⚠️ Unsloth native GGUF export failed: {e}")
+        print("🔧 Falling back to manual llama.cpp conversion with Vision support...")
         import subprocess
         import os
             
-        # Use llama.cpp's convert script directly on the 16bit dir
         llama_cpp_path = Path("llama.cpp")
         if not llama_cpp_path.exists():
-            print("   Downloading llama.cpp for fallback conversion...")
+            print("   Downloading latest llama.cpp...")
             subprocess.run(
                 "git clone https://github.com/ggerganov/llama.cpp.git", 
                 shell=True, check=True
             )
             
-        print(f"   Building llama.cpp for quantization...")
+        print(f"   Building llama.cpp...")
         subprocess.run("cd llama.cpp && cmake -B build && cmake --build build --config Release -j", shell=True, check=True)
             
-        print(f"   Converting {merge_16bit_dir} to GGUF f16...")
+        print(f"   Converting {merge_16bit_dir} to GGUF...")
         
-        f16_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-f16.gguf"
         final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
         
+        # NOTE: For Qwen-VL, we must use the latest convert script
+        # and ensure the vision projector tensors are included.
         convert_cmd = [
             sys.executable,
             "llama.cpp/convert_hf_to_gguf.py",
             merge_16bit_dir,
-            f"--outfile={f16_gguf_path}",
-            f"--outtype=f16"
+            f"--outfile={final_gguf_path}",
+            f"--outtype={quantization.replace('q', 'q')}" # Ensure correct format
         ]
         
         try:
             subprocess.run(convert_cmd, check=True)
-            print("   ✅ Step 3a: Fallback GGUF f16 conversion completed successfully!")
-            
-            print(f"   Quantizing {f16_gguf_path} to {quantization}...")
-            quantize_cmd = [
-                "./llama.cpp/build/bin/llama-quantize",
-                f16_gguf_path,
-                final_gguf_path,
-                quantization
-            ]
-            subprocess.run(quantize_cmd, check=True)
-            print("   ✅ Step 3b: Fallback GGUF quantization completed successfully!")
-            
-            # Cleanup f16
-            Path(f16_gguf_path).unlink(missing_ok=True)
+            print("   ✅ Fallback GGUF conversion completed!")
         except subprocess.CalledProcessError as sub_e:
-            print(f"   ❌ Fallback GGUF conversion also failed: {sub_e}")
+            print(f"   ❌ Fallback failed: {sub_e}")
             raise
 
     # ─── Step 4: Create Modelfile for Ollama ──────────────────────────

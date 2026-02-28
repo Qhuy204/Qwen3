@@ -58,6 +58,8 @@ def load_model(
 
     return model, processor
 
+    return model, processor
+
 
 def predict(
     model,
