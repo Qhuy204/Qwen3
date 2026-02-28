@@ -127,36 +127,41 @@ def main(
         f16_gguf_path = f"{output_dir}/qwen3-vl-8b-f16.gguf"
         final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
         
-        # STEP 1: Convert to F16 (This is required before complex quantization)
-        print(f"   🔄 Step 1/2: Converting to GGUF F16...")
+        # STEP 1: Convert main model to F16
+        print(f"   🔄 Step 1/3: Converting Main Model to GGUF F16...")
+        f16_gguf_path = f"{output_dir}/qwen3-vl-8b-f16.gguf"
         convert_cmd = [
-            sys.executable,
-            "llama.cpp/convert_hf_to_gguf.py",
-            merge_16bit_dir,
-            f"--outfile={f16_gguf_path}",
-            f"--outtype=f16"
+            sys.executable, "llama.cpp/convert_hf_to_gguf.py",
+            merge_16bit_dir, f"--outfile={f16_gguf_path}", "--outtype=f16"
         ]
         subprocess.run(convert_cmd, check=True)
         
-        # STEP 2: Quantize to target format (e.g. q4_k_m)
-        print(f"   📉 Step 2/2: Quantizing to {quantization}...")
-        quantize_bin = "./llama.cpp/build/bin/llama-quantize" 
-        # Nếu chạy trên Windows/Colab có thể khác, kiểm tra bin
-        if not os.path.exists(quantize_bin):
-            quantize_bin = "./llama.cpp/build/bin/quantize"
-            
-        quantize_cmd = [
-            quantize_bin,
-            f16_gguf_path,
-            final_gguf_path,
-            quantization
+        # STEP 2: Extract Vision Projector (The "MMPROJ" part)
+        print(f"   👁️ Step 2/3: Extracting Vision Projector (mmproj)...")
+        mmproj_path = f"{output_dir}/mmproj-f16.gguf"
+        # Llama.cpp tools version 30th Oct+ supports this
+        mmproj_cmd = [
+            sys.executable, "llama.cpp/convert_hf_to_gguf.py",
+            merge_16bit_dir, f"--outfile={mmproj_path}", "--outtype=f16", "--mmproj"
         ]
-        subprocess.run(quantize_cmd, check=True)
+        try:
+            subprocess.run(mmproj_cmd, check=True)
+        except:
+            print("   ⚠️ Note: Projector might already be in the main GGUF or requires manual extraction.")
+
+        # STEP 3: Quantize Main Model to target format (e.g. q4_k_m)
+        print(f"   📉 Step 3/3: Quantizing to {quantization}...")
+        final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
+        quantize_bin = "./llama.cpp/build/bin/llama-quantize" 
+        if not os.path.exists(quantize_bin): quantize_bin = "./llama.cpp/build/bin/quantize"
+            
+        subprocess.run([quantize_bin, f16_gguf_path, final_gguf_path, quantization], check=True)
         
-        # Cleanup bản F16 nặng nề
-        if os.path.exists(f16_gguf_path):
-            os.remove(f16_gguf_path)
-        print("   ✅ Fallback conversion completed successfully!")
+        # Cleanup
+        if os.path.exists(f16_gguf_path): os.remove(f16_gguf_path)
+        print(f"   ✅ Export DONE! Files created in {output_dir}:")
+        print(f"      - {os.path.basename(final_gguf_path)}")
+        print(f"      - {os.path.basename(mmproj_path)}")
 
     # ─── Step 4: Create Modelfile for Ollama ──────────────────────────
     final_gguf_name = f"qwen3-vl-8b-instruct-{quantization}.gguf"

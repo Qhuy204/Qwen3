@@ -53,10 +53,12 @@ def load_model(
     )
     FastVisionModel.for_inference(model)
 
-    # Force load processor from base model since LoRA's tokenizer might be just text
+    # Load processor with VRAM-friendly settings
     processor = AutoProcessor.from_pretrained(model_name)
-
-    return model, processor
+    
+    # TỐI ƯU VRAM: Giới hạn độ phân giải ảnh (giảm từ 8.5GB -> ~6GB)
+    processor.image_processor.min_pixels = 256 * 256
+    processor.image_processor.max_pixels = 768 * 768 
 
     return model, processor
 
@@ -67,7 +69,7 @@ def predict(
     image_path: str,
     question: str = "Mô tả chi tiết địa điểm du lịch trong bức ảnh này.",
     max_new_tokens: int = 512,
-    temperature: float = 0.7,
+    temperature: float = 0.2, # Giảm để trả lời chính xác hơn
 ) -> str:
     """
     Run inference on a single image + question.
