@@ -160,6 +160,34 @@ def main(
             print(f"   ❌ Fallback GGUF conversion also failed: {sub_e}")
             raise
 
+    # ─── Step 4: Create Modelfile for Ollama ──────────────────────────
+    final_gguf_name = f"qwen3-vl-8b-instruct-{quantization}.gguf"
+    modelfile_content = f"""FROM ./{final_gguf_name}
+
+# Setting parameters
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+
+# System Prompt
+SYSTEM "Bạn là một trợ lý du lịch thông minh chuyên về các địa điểm tại Việt Nam. Hãy trả lời câu hỏi dựa trên hình ảnh được cung cấp một cách chi tiết và chính xác."
+
+# Template
+TEMPLATE \"\"\"<|im_start|>system
+{{{{ .System }}}}<|im_end|>
+<|im_start|>user
+{{{{ if .Prompt }}}}{{{{ .Prompt }}}}{{{{ end }}}}
+{{{{ if .Image }}}}<|vision_start|><|image_pad|><|vision_end|>{{{{ end }}}}({{{{ .Image }}}})<|im_end|>
+<|im_start|>assistant
+\"\"\"
+"""
+    modelfile_path = Path(output_dir) / "Modelfile"
+    with open(modelfile_path, "w", encoding="utf-8") as f:
+        f.write(modelfile_content)
+    print(f"\n📝 Step 4: Ollama Modelfile created at {modelfile_path}")
+
     print("\n" + "=" * 60)
     print("✅ Export complete!")
     print(f"   GGUF file location: {output_dir}/")
