@@ -63,6 +63,12 @@ def main(
     print(f"   Quantization:  {quantization}")
     print(f"   Output dir:    {output_dir}")
 
+    # Kiểm tra sự tồn tại của folder lora
+    if not Path(lora_path).exists():
+        print(f"\n❌ LỖI: Không tìm thấy thư mục LoRA tại: {lora_path}")
+        print("Vui lòng kiểm tra lại đường dẫn trong configs/model_config.yaml hoặc truyền đúng tham số --lora-path")
+        return
+
     # ─── Step 1: Load model + LoRA ────────────────────────────────────
     print("\n🔧 Step 1: Loading model + LoRA adapter...")
 
