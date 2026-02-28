@@ -31,7 +31,7 @@ def load_model(
         lora_path: Path to LoRA adapter. If None, uses outputs/final_lora.
 
     Returns:
-        Tuple of (model, tokenizer, processor).
+        Tuple of (model, processor).
     """
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -45,6 +45,7 @@ def load_model(
     print(f"🔧 Loading LoRA from: {lora_path}")
 
     from unsloth import FastVisionModel
+    from transformers import AutoProcessor
 
     model, tokenizer = FastVisionModel.from_pretrained(
         lora_path,
@@ -52,12 +53,15 @@ def load_model(
     )
     FastVisionModel.for_inference(model)
 
-    return model, tokenizer
+    # Force load processor from base model since LoRA's tokenizer might be just text
+    processor = AutoProcessor.from_pretrained(model_name)
+
+    return model, processor
 
 
 def predict(
     model,
-    tokenizer,
+    processor,
     image_path: str,
     question: str = "Mô tả chi tiết địa điểm du lịch trong bức ảnh này.",
     max_new_tokens: int = 512,
@@ -68,7 +72,7 @@ def predict(
 
     Args:
         model: Fine-tuned model.
-        tokenizer: Tokenizer.
+        processor: Processor (AutoProcessor).
         image_path: Path to input image.
         question: Question about the image.
         max_new_tokens: Max tokens to generate.
@@ -85,14 +89,14 @@ def predict(
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": question},
                 {"type": "image", "image": image},
+                {"type": "text", "text": question},
             ],
         }
     ]
 
     # Apply chat template
-    input_text = tokenizer.apply_chat_template(
+    input_text = processor.apply_chat_template(
         messages,
         add_generation_prompt=True,
         tokenize=False,
@@ -102,7 +106,7 @@ def predict(
 
     image_inputs, video_inputs = process_vision_info(messages)
 
-    inputs = tokenizer(
+    inputs = processor(
         text=[input_text],
         images=image_inputs,
         videos=video_inputs,
@@ -112,7 +116,7 @@ def predict(
 
     from transformers import TextStreamer
 
-    streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+    streamer = TextStreamer(processor.tokenizer, skip_prompt=True, skip_special_tokens=True)
 
     print(f"\n🖼️ Image: {image_path}")
     print(f"❓ Question: {question}")
@@ -129,7 +133,7 @@ def predict(
 
     # Decode (without streamer for return value)
     generated_ids = outputs[0][inputs["input_ids"].shape[-1] :]
-    answer = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    answer = processor.tokenizer.decode(generated_ids, skip_special_tokens=True)
 
     return answer
 
@@ -150,10 +154,10 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=0.7)
     args = parser.parse_args()
 
-    model, tokenizer = load_model(args.config, args.lora_path)
+    model, processor = load_model(args.config, args.lora_path)
     answer = predict(
         model,
-        tokenizer,
+        processor,
         args.image,
         args.question,
         args.max_tokens,

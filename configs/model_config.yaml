@@ -38,7 +38,7 @@ training:
   eval_steps: 200
   seed: 3407
   optim: "adamw_8bit"
-  output_dir: "/content/drive/MyDrive/Qwen3_Backup/outputs"
+  output_dir: "outputs"
   max_length: 2048
   fp16: false
   bf16: true                           # A100 supports bf16
@@ -54,5 +54,5 @@ data:
 
 export:
   quantization_method: "q4_k_m"        # Tối ưu cho RTX 3060
-  output_dir: "/content/drive/MyDrive/Qwen3_Backup/exported_model"
+  output_dir: "outputs/exported_model"
   merge_16bit_dir: "merged_model_16bit"

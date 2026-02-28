@@ -66,7 +66,13 @@ def main(
     # ─── Step 1: Load model + LoRA ────────────────────────────────────
     print("\n🔧 Step 1: Loading model + LoRA adapter...")
 
+    import torch
+    import gc
     from unsloth import FastVisionModel
+
+    # Giải phóng memory cũ nếu có
+    gc.collect()
+    torch.cuda.empty_cache()
 
     model, tokenizer = FastVisionModel.from_pretrained(
         lora_path,
@@ -75,10 +81,17 @@ def main(
 
     # ─── Step 2: Save merged 16-bit ──────────────────────────────────
     print(f"\n💾 Step 2: Saving merged model to 16-bit → {merge_16bit_dir}")
+    print("   (Quá trình này tốn nhiều RAM, vui lòng không tắt Terminal...)")
+    
+    # Giải phóng VRAM trước khi merge (Merge thường tiêu tốn nhiều RAM hệ thống hơn)
+    gc.collect()
+    torch.cuda.empty_cache()
+
     model.save_pretrained_merged(
         merge_16bit_dir,
         tokenizer,
         save_method="merged_16bit",
+        # Thêm các tùy chọn tối ưu nếu cần
     )
     print("   ✅ 16-bit merge complete!")
 
@@ -96,50 +109,50 @@ def main(
         import subprocess
         import os
             
-            # Use llama.cpp's convert script directly on the 16bit dir
-            llama_cpp_path = Path("llama.cpp")
-            if not llama_cpp_path.exists():
-                print("   Downloading llama.cpp for fallback conversion...")
-                subprocess.run(
-                    "git clone https://github.com/ggerganov/llama.cpp.git", 
-                    shell=True, check=True
-                )
-                
-            print(f"   Building llama.cpp for quantization...")
-            subprocess.run("cd llama.cpp && cmake -B build && cmake --build build --config Release -j", shell=True, check=True)
-                
-            print(f"   Converting {merge_16bit_dir} to GGUF f16...")
+        # Use llama.cpp's convert script directly on the 16bit dir
+        llama_cpp_path = Path("llama.cpp")
+        if not llama_cpp_path.exists():
+            print("   Downloading llama.cpp for fallback conversion...")
+            subprocess.run(
+                "git clone https://github.com/ggerganov/llama.cpp.git", 
+                shell=True, check=True
+            )
             
-            f16_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-f16.gguf"
-            final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
+        print(f"   Building llama.cpp for quantization...")
+        subprocess.run("cd llama.cpp && cmake -B build && cmake --build build --config Release -j", shell=True, check=True)
             
-            convert_cmd = [
-                sys.executable,
-                "llama.cpp/convert_hf_to_gguf.py",
-                merge_16bit_dir,
-                f"--outfile={f16_gguf_path}",
-                f"--outtype=f16"
+        print(f"   Converting {merge_16bit_dir} to GGUF f16...")
+        
+        f16_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-f16.gguf"
+        final_gguf_path = f"{output_dir}/qwen3-vl-8b-instruct-{quantization}.gguf"
+        
+        convert_cmd = [
+            sys.executable,
+            "llama.cpp/convert_hf_to_gguf.py",
+            merge_16bit_dir,
+            f"--outfile={f16_gguf_path}",
+            f"--outtype=f16"
+        ]
+        
+        try:
+            subprocess.run(convert_cmd, check=True)
+            print("   ✅ Step 3a: Fallback GGUF f16 conversion completed successfully!")
+            
+            print(f"   Quantizing {f16_gguf_path} to {quantization}...")
+            quantize_cmd = [
+                "./llama.cpp/build/bin/llama-quantize",
+                f16_gguf_path,
+                final_gguf_path,
+                quantization
             ]
+            subprocess.run(quantize_cmd, check=True)
+            print("   ✅ Step 3b: Fallback GGUF quantization completed successfully!")
             
-            try:
-                subprocess.run(convert_cmd, check=True)
-                print("   ✅ Step 3a: Fallback GGUF f16 conversion completed successfully!")
-                
-                print(f"   Quantizing {f16_gguf_path} to {quantization}...")
-                quantize_cmd = [
-                    "./llama.cpp/build/bin/llama-quantize",
-                    f16_gguf_path,
-                    final_gguf_path,
-                    quantization
-                ]
-                subprocess.run(quantize_cmd, check=True)
-                print("   ✅ Step 3b: Fallback GGUF quantization completed successfully!")
-                
-                # Cleanup f16
-                Path(f16_gguf_path).unlink(missing_ok=True)
-            except subprocess.CalledProcessError as sub_e:
-                print(f"   ❌ Fallback GGUF conversion also failed: {sub_e}")
-                raise
+            # Cleanup f16
+            Path(f16_gguf_path).unlink(missing_ok=True)
+        except subprocess.CalledProcessError as sub_e:
+            print(f"   ❌ Fallback GGUF conversion also failed: {sub_e}")
+            raise
 
     print("\n" + "=" * 60)
     print("✅ Export complete!")
